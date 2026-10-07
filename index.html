@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Japan Energy Futures Simulator</title>
+<meta name="description" content="Interactive scenario simulator projecting Japan's electricity generation mix and grid carbon intensity under different nuclear, coal, and renewables policy choices." />
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --paper: #eef1ec;
+    --surface: #fbfbf9;
+    --ink: #1b2430;
+    --muted: #6b7079;
+    --hairline: #d7dad1;
+    --indigo: #2d4a73;
+    --indigo-dim: #e2e7ec;
+    --vermilion: #a8402a;
+    --good: #3f6b4e;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 400;
+    line-height: 1.65;
+    min-height: 100vh;
+  }
+
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  h1, h2, .display { font-family: 'Spectral', serif; }
+
+  a { color: var(--indigo); }
+
+  :focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+
+  /* ---- HEADER ---- */
+  header {
+    border-bottom: 1px solid var(--hairline);
+    padding: 1.1rem 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .back-link {
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .back-link:hover { color: var(--indigo); text-decoration: underline; }
+  .header-note {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  /* ---- HERO ---- */
+  .hero {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 3.6rem 2.5rem 2.4rem;
+    opacity: 0;
+    animation: rise 0.6s ease-out 0.1s forwards;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .hero-kicker {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 1rem;
+    color: var(--indigo);
+    margin-bottom: 0.6rem;
+  }
+  .hero h1 {
+    font-size: clamp(2rem, 4.4vw, 3rem);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    margin-bottom: 1.1rem;
+    max-width: 20ch;
+  }
+  .hero-rule {
+    width: 64px;
+    height: 2px;
+    background: var(--vermilion);
+    margin-bottom: 1.3rem;
+  }
+  .hero p.dek {
+    color: var(--ink);
+    font-size: 1.05rem;
+    max-width: 62ch;
+    line-height: 1.7;
+  }
+  .hero p.dek .muted-note {
+    color: var(--muted);
+    font-size: 0.92rem;
+    display: block;
+    margin-top: 0.9rem;
+  }
+
+  /* ---- MAIN LAYOUT ---- */
+  .main-section {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1rem 2.5rem 2.5rem;
+  }
+
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 3rem;
+    margin-bottom: 2.6rem;
+  }
+
+  /* -- presets (left column, top) -- */
+  .presets-label {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 0.88rem;
+    color: var(--muted);
+    margin-bottom: 0.7rem;
+  }
+  .presets {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    margin-bottom: 2rem;
+    border-top: 1px solid var(--hairline);
+  }
+  .preset-btn {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.88rem;
+    text-align: left;
+    padding: 0.65rem 0.1rem;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--hairline);
+    color: var(--ink);
+    cursor: pointer;
+    position: relative;
+    padding-left: 0.9rem;
+  }
+  .preset-btn::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 1.05rem;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--hairline);
+  }
+  .preset-btn:hover { color: var(--indigo); }
+  .preset-btn.active { color: var(--indigo); font-weight: 500; }
+  .preset-btn.active::before { background: var(--vermilion); }
+
+  /* -- sliders (left column) -- */
+  .controls {
+    border-top: 1px solid var(--hairline);
+  }
+  .control {
+    padding: 0.9rem 0 1.1rem;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .control-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.6rem;
+    gap: 0.6rem;
+  }
+  .control-label span:first-child {
+    font-size: 0.86rem;
+    color: var(--ink);
+  }
+  .control-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.86rem;
+    color: var(--indigo);
+    white-space: nowrap;
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--indigo);
+  }
+  .control-hint {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 0.55rem;
+    line-height: 1.5;
+  }
+
+  /* -- chart (right column) -- */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    padding: 1.6rem 1.8rem 1.3rem;
+  }
+  .chart-wrap { position: relative; height: 400px; }
+  .fig-caption {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 0.86rem;
+    color: var(--muted);
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--hairline);
+  }
+
+  /* -- key figures row -- */
+  .figures {
+    display: flex;
+    border-top: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
+    margin-bottom: 1.6rem;
+  }
+  .figure-item {
+    flex: 1;
+    padding: 1.3rem 1.6rem;
+    border-left: 1px solid var(--hairline);
+  }
+  .figure-item:first-child { border-left: none; padding-left: 0; }
+  .figure-label {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 0.84rem;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+  .figure-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .figure-value .unit {
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .figure-value.good { color: var(--good); }
+  .figure-value.bad { color: var(--vermilion); }
+  .figure-sub { font-size: 0.78rem; color: var(--muted); margin-top: 0.5rem; }
+
+  /* -- tools row -- */
+  .tools-row {
+    display: flex;
+    gap: 1.8rem;
+    margin-bottom: 0.5rem;
+  }
+  .tool-btn {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.86rem;
+    padding: 0;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--indigo);
+    color: var(--indigo);
+    cursor: pointer;
+  }
+  .tool-btn:hover { color: var(--vermilion); border-color: var(--vermilion); }
+  .tool-btn.confirmed { color: var(--good); border-color: var(--good); }
+
+  /* ---- METHODOLOGY (appendix) ---- */
+  .appendix {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1rem 2.5rem 4rem;
+    border-top: 1px solid var(--hairline);
+    padding-top: 2.6rem;
+  }
+  .appendix-label {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 0.95rem;
+    color: var(--indigo);
+    margin-bottom: 1.2rem;
+  }
+  .appendix summary {
+    cursor: pointer;
+    font-size: 0.92rem;
+    color: var(--ink);
+    margin-bottom: 1rem;
+  }
+  .appendix[open] summary { margin-bottom: 1.3rem; }
+  .appendix p {
+    font-size: 0.9rem;
+    color: var(--ink);
+    max-width: 68ch;
+    margin-bottom: 0.9rem;
+    line-height: 1.75;
+  }
+  .appendix p.muted { color: var(--muted); }
+  .appendix strong { font-weight: 600; }
+  .appendix table {
+    border-collapse: collapse;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.82rem;
+    margin: 0.4rem 0 1rem;
+  }
+  .appendix td { padding: 0.4rem 1rem 0.4rem 0; border-bottom: 1px solid var(--hairline); }
+
+  footer {
+    border-top: 1px solid var(--hairline);
+    padding: 2rem 2.5rem;
+    text-align: center;
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 0.86rem;
+    color: var(--muted);
+  }
+  footer a { color: var(--indigo); }
+
+  @media (max-width: 760px) {
+    .scenario-grid { grid-template-columns: 1fr; gap: 2rem; }
+    .figures { flex-direction: column; }
+    .figure-item { border-left: none; border-top: 1px solid var(--hairline); padding-left: 0; }
+    .figure-item:first-child { border-top: none; }
+    header { padding: 1rem 1.4rem; }
+    .hero, .main-section, .appendix { padding-left: 1.4rem; padding-right: 1.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="https://riko-miyagi.github.io/" class="back-link">&larr; riko-miyagi.github.io</a>
+  <span class="header-note">a scenario model</span>
+</header>
+
+<div class="hero">
+  <p class="hero-kicker">An interactive energy policy tool</p>
+  <h1>Japan Energy Futures Simulator</h1>
+  <div class="hero-rule"></div>
+  <p class="dek">
+    Projects Japan's electricity generation mix and grid carbon intensity through 2040, built on real 2000–2024 history (EIA, Ember) and literature-based emission factors.
+    <span class="muted-note">Move the controls below to choose how much nuclear power returns, how fast renewables grow, and how fast coal is phased down — the chart and figures update to match.</span>
+  </p>
+</div>
+
+<div class="main-section">
+
+  <div class="scenario-grid">
+    <div>
+      <p class="presets-label">Choose a scenario</p>
+      <div class="presets">
+        <button class="preset-btn" data-preset="bau">Business as usual</button>
+        <button class="preset-btn" data-preset="gov">Government target (2030)</button>
+        <button class="preset-btn" data-preset="renew">Aggressive renewables, no nuclear</button>
+        <button class="preset-btn" data-preset="nuclear">Nuclear restart heavy</button>
+      </div>
+
+      <div class="controls">
+        <div class="control">
+          <div class="control-label"><span>Target year</span><span class="control-value" id="val-year">2030</span></div>
+          <input type="range" id="slider-year" min="2025" max="2040" step="1" value="2030" />
+          <div class="control-hint">How far into the future to project.</div>
+        </div>
+        <div class="control">
+          <div class="control-label"><span>Nuclear restart</span><span class="control-value" id="val-nuclear">25%</span></div>
+          <input type="range" id="slider-nuclear" min="0" max="100" step="5" value="25" />
+          <div class="control-hint">As a % of 2010's pre-Fukushima peak (278 TWh). 2024 actual is about 30%.</div>
+        </div>
+        <div class="control">
+          <div class="control-label"><span>Renewable growth</span><span class="control-value" id="val-renew">8%/yr</span></div>
+          <input type="range" id="slider-renew" min="0" max="20" step="1" value="8" />
+          <div class="control-hint">Compound annual growth of non-hydro renewables, mostly solar.</div>
+        </div>
+        <div class="control">
+          <div class="control-label"><span>Coal phase-down</span><span class="control-value" id="val-coal">2%/yr</span></div>
+          <input type="range" id="slider-coal" min="0" max="15" step="1" value="2" />
+          <div class="control-hint">Compound annual decline in coal generation.</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="chart-card">
+        <div class="chart-wrap"><canvas id="mixChart"></canvas></div>
+        <p class="fig-caption">Figure 1. Generation mix by fuel type, 2000–<span id="fig-year">2030</span>. Years after 2024 reflect the scenario at left, not a measured record.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="figures">
+    <div class="figure-item">
+      <div class="figure-label">2024 actual intensity</div>
+      <div class="figure-value">483.6 <span class="unit">gCO2/kWh</span></div>
+      <div class="figure-sub">Starting point for every scenario</div>
+    </div>
+    <div class="figure-item">
+      <div class="figure-label">Projected intensity</div>
+      <div class="figure-value" id="kpi-projected">—</div>
+      <div class="figure-sub" id="kpi-projected-sub"></div>
+    </div>
+    <div class="figure-item">
+      <div class="figure-label">Change vs. 2024</div>
+      <div class="figure-value" id="kpi-change">—</div>
+      <div class="figure-sub">Negative means a cleaner grid</div>
+    </div>
+    <div class="figure-item">
+      <div class="figure-label">Import dependency</div>
+      <div class="figure-value" id="kpi-import">—</div>
+      <div class="figure-sub" id="kpi-import-sub">2024 actual: 66.0%</div>
+    </div>
+  </div>
+
+  <div class="tools-row">
+    <button class="tool-btn" id="btn-share">Copy share link</button>
+    <button class="tool-btn" id="btn-export">Export scenario as CSV</button>
+  </div>
+
+</div>
+
+<div class="appendix">
+  <p class="appendix-label">Methodology notes</p>
+  <details>
+    <summary>How this model works, and what it assumes</summary>
+    <p><strong>Projection.</strong> Starting from 2024's actual generation mix, nuclear generation moves linearly toward your chosen target (expressed as a % of 2010's pre-Fukushima peak of 278 TWh). Coal declines and renewables grow at your chosen compound annual rate. Oil, other fossil gases, and hydroelectric are held at 2024 levels — all three are small and structurally fairly fixed in Japan's system. Natural gas absorbs whatever is left to meet total demand, held flat at the 2024 level — the same role it actually played after Fukushima. If a scenario would push non-gas generation above total demand, renewable growth is capped so gas is never implied to go negative; this only triggers under fairly extreme slider combinations.</p>
+    <p><strong>Emission factors</strong>, in gCO2eq per kWh:</p>
+    <table>
+      <tr><td>Nuclear</td><td>12.5</td><td>Hydroelectric</td><td>24.9</td></tr>
+      <tr><td>Non-hydro renewables</td><td>98.7</td><td>Natural gas</td><td>467.6</td></tr>
+      <tr><td>Other fossil gases</td><td>675.4</td><td>Oil</td><td>727.4</td></tr>
+      <tr><td>Coal</td><td>935.2</td><td></td><td></td></tr>
+    </table>
+    <p class="muted">These are literature-standard (IPCC-style median) lifecycle factors, with the renewables figure blended to reflect Japan's actual solar/biomass/wind/geothermal split. A single uniform +3.9% scaling correction was fitted to account for accounting-scope differences between source datasets.</p>
+    <p><strong>Validation.</strong> Checked against 25 years of actual history, this model achieves R² = 0.978 and a mean error of about 1.4%. It's a simplified scenario-exploration tool, not a precision forecast — treat projected numbers as directionally meaningful, not an exact prediction.</p>
+    <p><strong>Import dependency.</strong> Coal, natural gas, oil, and other fossil gases are classified as imported, since Japan imports nearly all of its fossil fuel. Hydroelectric and renewables are classified as domestic. Nuclear is classified as <em>quasi-domestic</em> (準国産エネルギー), matching Japan's own METI convention — enriched uranium fuel can be stockpiled for years and sourced from diversified suppliers, so it's treated differently from continuously-flowing fossil fuel imports despite not being mined domestically.</p>
+  </details>
+</div>
+
+<footer>
+  Built by <a href="https://riko-miyagi.github.io/" target="_blank">Riko Miyagi</a> — data from EIA and Ember — <a href="https://github.com/riko-miyagi/japan-energy-futures-simulator" target="_blank">source on GitHub</a>
+</footer>
+
+<script>
+// ---- DATA ----
+const historical = [
+{year:2000, nuclear:305.9470, coal:192.2300, gas:254.5600, oil:133.1600, otherFossil:35.9740, hydro:86.3800, renewables:13.0150, intensity:424.431},
+{year:2001, nuclear:303.8650, coal:206.9760, gas:254.2560, oil:105.1670, otherFossil:36.9950, hydro:83.3240, renewables:12.8970, intensity:424.052},
+{year:2002, nuclear:280.3390, coal:223.9930, gas:258.1080, oil:127.2700, otherFossil:38.1330, hydro:81.5540, renewables:13.4960, intensity:433.787},
+{year:2003, nuclear:228.0120, coal:240.4320, gas:268.1270, oil:132.7890, otherFossil:37.5870, hydro:93.6610, renewables:14.7620, intensity:476.382},
+{year:2004, nuclear:268.3200, coal:251.8700, gas:257.0000, oil:123.0090, otherFossil:34.8700, hydro:93.1220, renewables:15.8440, intensity:450.313},
+{year:2005, nuclear:280.5020, coal:267.3230, gas:243.2340, oil:133.8430, otherFossil:32.5690, hydro:75.7050, renewables:20.1310, intensity:461.865},
+{year:2006, nuclear:291.5420, coal:258.0640, gas:267.7280, oil:111.0940, otherFossil:32.9020, hydro:86.6490, renewables:20.9420, intensity:447.309},
+{year:2007, nuclear:267.3370, coal:272.1220, gas:292.5490, oil:152.3750, otherFossil:33.3450, hydro:73.2690, renewables:22.0770, intensity:470.260},
+{year:2008, nuclear:241.2540, coal:271.3580, gas:293.1970, oil:130.2250, otherFossil:28.1930, hydro:75.6840, renewables:24.3730, intensity:485.305},
+{year:2009, nuclear:263.0530, coal:267.5640, gas:298.6000, oil:86.4760, otherFossil:27.5200, hydro:76.1270, renewables:27.3040, intensity:460.283},
+{year:2010, nuclear:278.3646, coal:283.8860, gas:332.2840, oil:90.8110, otherFossil:33.3520, hydro:83.4320, renewables:30.6248, intensity:446.741},
+{year:2011, nuclear:153.3754, coal:289.2060, gas:409.5180, oil:150.2480, otherFossil:29.0000, hydro:84.5510, renewables:33.9739, intensity:505.409},
+{year:2012, nuclear:15.1213, coal:305.3444, gas:430.2210, oil:180.6830, otherFossil:31.1230, hydro:76.1770, renewables:36.8819, intensity:594.630},
+{year:2013, nuclear:10.4328, coal:332.2138, gas:441.6470, oil:148.0040, otherFossil:32.2460, hydro:79.0360, renewables:43.0511, intensity:595.999},
+{year:2014, nuclear:0.0000, coal:337.7368, gas:453.7320, oil:106.9550, otherFossil:33.0190, hydro:83.1620, renewables:52.1986, intensity:591.612},
+{year:2015, nuclear:3.2406, coal:341.5079, gas:424.2990, oil:91.4580, otherFossil:32.3020, hydro:86.7510, renewables:66.0651, intensity:578.141},
+{year:2016, nuclear:14.8691, coal:342.4550, gas:439.3210, oil:73.6530, otherFossil:31.2490, hydro:79.1380, renewables:85.1667, intensity:567.119},
+{year:2017, nuclear:27.7515, coal:339.4793, gas:425.3063, oil:60.8087, otherFossil:30.0326, hydro:83.4170, renewables:99.5561, intensity:558.138},
+{year:2018, nuclear:47.8233, coal:332.8056, gas:405.9972, oil:45.5364, otherFossil:28.4367, hydro:80.6340, renewables:108.1240, intensity:541.568},
+{year:2019, nuclear:63.8788, coal:317.8612, gas:372.2924, oil:34.8204, otherFossil:27.8981, hydro:79.8197, renewables:119.4597, intensity:528.596},
+{year:2020, nuclear:41.8631, coal:292.6222, gas:371.6905, oil:31.5550, otherFossil:22.1778, hydro:78.8074, renewables:136.9160, intensity:527.837},
+{year:2021, nuclear:61.2230, coal:302.8408, gas:346.6626, oil:39.5550, otherFossil:24.8820, hydro:79.1367, renewables:151.4780, intensity:514.590},
+{year:2022, nuclear:51.5023, coal:308.1549, gas:342.1472, oil:42.9738, otherFossil:20.0980, hydro:71.8056, renewables:161.0027, intensity:519.686},
+{year:2023, nuclear:77.0540, coal:281.0306, gas:312.3536, oil:27.8628, otherFossil:19.5377, hydro:72.0829, renewables:172.5753, intensity:492.594},
+{year:2024, nuclear:82.9631, coal:258.6655, gas:308.9967, oil:17.5411, otherFossil:17.9830, hydro:69.8861, renewables:157.9973, intensity:483.580}
+];
+
+const F = { nuclear:12.5, coal:935.2, gas:467.6, oil:727.4, otherFossil:675.4, hydro:24.9, renewables:98.7 };
+const BASE = historical[historical.length-1];
+const TOTAL_2024 = BASE.nuclear + BASE.coal + BASE.gas + BASE.oil + BASE.otherFossil + BASE.hydro + BASE.renewables;
+const PEAK_2010_NUCLEAR = 278.3646;
+
+function projectScenario(targetYear, nuclearPct, renGrowthPct, coalDeclinePct) {
+  const nuclearTarget = (nuclearPct/100) * PEAK_2010_NUCLEAR;
+  const years = [];
+  for (let y = 2025; y <= targetYear; y++) {
+    const t = (y - 2024) / (targetYear - 2024);
+    const nuclear = BASE.nuclear + (nuclearTarget - BASE.nuclear) * t;
+    const coal = BASE.coal * Math.pow(1 - coalDeclinePct/100, y - 2024);
+    let renewables = BASE.renewables * Math.pow(1 + renGrowthPct/100, y - 2024);
+    const oil = BASE.oil, otherFossil = BASE.otherFossil, hydro = BASE.hydro;
+
+    let nonGasTotal = nuclear + coal + oil + otherFossil + hydro + renewables;
+    let gas;
+    if (nonGasTotal > TOTAL_2024) {
+      const excess = nonGasTotal - TOTAL_2024;
+      renewables = Math.max(0, renewables - excess);
+      nonGasTotal = nuclear + coal + oil + otherFossil + hydro + renewables;
+      gas = Math.max(0, TOTAL_2024 - nonGasTotal);
+    } else {
+      gas = TOTAL_2024 - nonGasTotal;
+    }
+
+    const emissions = nuclear*F.nuclear + coal*F.coal + gas*F.gas + oil*F.oil + otherFossil*F.otherFossil + hydro*F.hydro + renewables*F.renewables;
+    const intensity = emissions / TOTAL_2024;
+    const imported = coal + gas + oil + otherFossil;
+    const importShare = (imported / TOTAL_2024) * 100;
+    years.push({year:y, nuclear, coal, gas, oil, otherFossil, hydro, renewables, intensity, importShare});
+  }
+  return years;
+}
+
+const BASE_IMPORTED = BASE.coal + BASE.gas + BASE.oil + BASE.otherFossil;
+const BASE_IMPORT_SHARE = (BASE_IMPORTED / TOTAL_2024) * 100;
+
+const presets = {
+  bau:     { year:2030, nuclear:25, renew:8,  coal:2 },
+  gov:     { year:2030, nuclear:69, renew:9,  coal:3 },
+  renew:   { year:2035, nuclear:0,  renew:15, coal:6 },
+  nuclear: { year:2030, nuclear:90, renew:5,  coal:4 }
+};
+
+const sliderYear = document.getElementById('slider-year');
+const sliderNuclear = document.getElementById('slider-nuclear');
+const sliderRenew = document.getElementById('slider-renew');
+const sliderCoal = document.getElementById('slider-coal');
+
+let chart;
+
+const palette = {
+  nuclear: '#c0574a', coal: '#4a4a45', gas: '#8a8f98',
+  oil: '#a9792f', otherFossil: '#6b6a63',
+  hydro: '#3a6ea5', renewables: '#5c8a52'
+};
+
+function renderChart() {
+  const targetYear = parseInt(sliderYear.value);
+  const nuclearPct = parseInt(sliderNuclear.value);
+  const renGrowth = parseInt(sliderRenew.value);
+  const coalDecline = parseInt(sliderCoal.value);
+
+  document.getElementById('val-year').textContent = targetYear;
+  document.getElementById('val-nuclear').textContent = nuclearPct + '%';
+  document.getElementById('val-renew').textContent = renGrowth + '%/yr';
+  document.getElementById('val-coal').textContent = coalDecline + '%/yr';
+  document.getElementById('fig-year').textContent = targetYear;
+
+  const projected = projectScenario(targetYear, nuclearPct, renGrowth, coalDecline);
+  const allYears = historical.map(d => d.year).concat(projected.map(d => d.year));
+
+  const cats = ['nuclear','coal','gas','oil','otherFossil','hydro','renewables'];
+  const labels = { nuclear:'Nuclear', coal:'Coal', gas:'Natural Gas', oil:'Oil', otherFossil:'Other Fossil Gases', hydro:'Hydroelectric', renewables:'Non-hydro Renewables' };
+
+  const datasets = cats.map(cat => ({
+    label: labels[cat],
+    data: historical.map(d => d[cat]).concat(projected.map(d => d[cat])),
+    backgroundColor: palette[cat] + 'cc',
+    borderColor: palette[cat],
+    borderWidth: 1,
+    fill: true,
+    pointRadius: 0,
+    tension: 0
+  }));
+
+  const lastHistYear = historical[historical.length-1].year;
+  const projStart = allYears.indexOf(lastHistYear);
+
+  if (chart) chart.destroy();
+  const ctx = document.getElementById('mixChart').getContext('2d');
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: allYears, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { stacked: true, grid: { color: '#d7dad1' }, ticks: { color: '#6b7079', font: { family: 'IBM Plex Mono', size: 10 } } },
+        y: { stacked: true, title: { display: true, text: 'Generation (TWh)', color: '#6b7079', font: { family: 'IBM Plex Sans' } }, grid: { color: '#d7dad1' }, ticks: { color: '#6b7079', font: { family: 'IBM Plex Mono', size: 10 } } }
+      },
+      plugins: {
+        legend: { labels: { color: '#1b2430', font: { family: 'IBM Plex Sans', size: 11 }, boxWidth: 12, boxHeight: 12 } },
+        tooltip: {
+          backgroundColor: '#1b2430',
+          titleFont: { family: 'IBM Plex Sans' },
+          bodyFont: { family: 'IBM Plex Mono' },
+          callbacks: {
+            afterBody: (items) => {
+              const idx = items[0].dataIndex;
+              const isProjected = idx > projStart;
+              return isProjected ? ['(projected scenario)'] : ['(actual history)'];
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const lastProjected = projected[projected.length-1];
+  const baseIntensity = BASE.intensity;
+  const projIntensity = lastProjected ? lastProjected.intensity : baseIntensity;
+  const pctChange = ((projIntensity - baseIntensity) / baseIntensity) * 100;
+
+  document.getElementById('kpi-projected').textContent = projIntensity.toFixed(1) + ' gCO2/kWh';
+  document.getElementById('kpi-projected-sub').textContent = 'in ' + targetYear;
+  const changeEl = document.getElementById('kpi-change');
+  changeEl.textContent = (pctChange >= 0 ? '+' : '') + pctChange.toFixed(1) + '%';
+  changeEl.className = 'figure-value ' + (pctChange < 0 ? 'good' : (pctChange > 0 ? 'bad' : ''));
+
+  const projImportShare = lastProjected ? lastProjected.importShare : BASE_IMPORT_SHARE;
+  const importDelta = projImportShare - BASE_IMPORT_SHARE;
+  document.getElementById('kpi-import').textContent = projImportShare.toFixed(1) + '%';
+  document.getElementById('kpi-import-sub').textContent = '2024 actual: ' + BASE_IMPORT_SHARE.toFixed(1) + '% (' + (importDelta >= 0 ? '+' : '') + importDelta.toFixed(1) + ' pts)';
+
+  updateShareUrl(targetYear, nuclearPct, renGrowth, coalDecline);
+  window._lastScenario = { targetYear, nuclearPct, renGrowth, coalDecline, projected };
+}
+
+function updateShareUrl(year, nuclear, renew, coal) {
+  const params = new URLSearchParams({ year, nuclear, renew, coal });
+  const newUrl = window.location.pathname + '?' + params.toString();
+  history.replaceState(null, '', newUrl);
+}
+
+function loadFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('year')) return false;
+  sliderYear.value = params.get('year') || sliderYear.value;
+  sliderNuclear.value = params.get('nuclear') || sliderNuclear.value;
+  sliderRenew.value = params.get('renew') || sliderRenew.value;
+  sliderCoal.value = params.get('coal') || sliderCoal.value;
+  return true;
+}
+
+[sliderYear, sliderNuclear, sliderRenew, sliderCoal].forEach(s => s.addEventListener('input', () => {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  renderChart();
+}));
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const p = presets[btn.dataset.preset];
+    sliderYear.value = p.year;
+    sliderNuclear.value = p.nuclear;
+    sliderRenew.value = p.renew;
+    sliderCoal.value = p.coal;
+    renderChart();
+  });
+});
+
+document.getElementById('btn-share').addEventListener('click', (e) => {
+  const url = window.location.href;
+  const btn = e.currentTarget;
+  const original = 'Copy share link';
+  const finish = () => {
+    btn.textContent = 'Link copied';
+    btn.classList.add('confirmed');
+    setTimeout(() => { btn.textContent = original; btn.classList.remove('confirmed'); }, 1800);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(finish).catch(finish);
+  } else {
+    finish();
+  }
+});
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  const s = window._lastScenario;
+  if (!s) return;
+  const cats = ['nuclear','coal','gas','oil','otherFossil','hydro','renewables'];
+  const header = ['year', ...cats, 'intensity_gco2_per_kwh', 'import_share_pct', 'source'];
+  const rows = [header.join(',')];
+  historical.forEach(d => {
+    const imported = ((d.coal + d.gas + d.oil + d.otherFossil) / TOTAL_2024) * 100;
+    rows.push([d.year, ...cats.map(c => d[c].toFixed(2)), d.intensity.toFixed(2), imported.toFixed(1), 'actual'].join(','));
+  });
+  s.projected.forEach(d => {
+    rows.push([d.year, ...cats.map(c => d[c].toFixed(2)), d.intensity.toFixed(2), d.importShare.toFixed(1), 'projected'].join(','));
+  });
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `japan-energy-scenario-${s.targetYear}-n${s.nuclearPct}-r${s.renGrowth}-c${s.coalDecline}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+loadFromUrl();
+renderChart();
+</script>
+
+</body>
+</html>
